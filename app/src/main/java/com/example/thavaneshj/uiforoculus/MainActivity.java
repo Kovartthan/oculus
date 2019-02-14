@@ -5,14 +5,14 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.media.AudioManager;
-import android.os.Handler;
+import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.View;
@@ -36,7 +36,7 @@ import java.util.Locale;
 import fr.quentinklein.slt.LocationTracker;
 import fr.quentinklein.slt.TrackerSettings;
 
-public class MainActivity extends AppCompatActivity implements SpeechDelegate, TextToSpeech.OnInitListener,TextToSpeech.OnUtteranceCompletedListener {
+public class MainActivity extends AppCompatActivity implements SpeechDelegate, TextToSpeech.OnInitListener {
     private static final int PERMISSIONS_REQUEST = 1051;
     private SpeechProgressView progress;
     private ImageView imgMic;
@@ -45,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     private boolean isEmergency;
     private LocationTracker tracker;
     private String text;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -80,12 +81,37 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                 onStartToListen();
             }
         });
+        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            @Override
+            public void onDone(String utteranceId) {
+                Log.e("tag","onDone "+utteranceId);
+                if (text.equalsIgnoreCase(utteranceId)) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            onStartToListen();
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onError(String utteranceId) {
+            }
+
+            @Override
+            public void onStart(String utteranceId) {
+            }
+        });
     }
 
     private void onStartToListen() {
+        Log.e("tag","onStartToListen");
         if (Speech.getInstance().isListening()) {
+            Log.e("tag","stopListening");
             Speech.getInstance().stopListening();
         } else {
+
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 onRecordAudioPermissionGranted();
             } else {
@@ -112,9 +138,9 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         progress.setVisibility(View.VISIBLE);
         txtInfo.setVisibility(View.GONE);
         try {
+            Log.e("tag","stopTextToSpeech");
             Speech.getInstance().stopTextToSpeech();
             Speech.getInstance().startListening(progress, MainActivity.this);
-
         } catch (SpeechRecognitionNotAvailable exc) {
             showSpeechNotSupportedDialog();
 
@@ -187,7 +213,11 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             Speech.getInstance().say(getString(R.string.repeat));
 
         } else {
-            Toast.makeText(this, "result "+result, Toast.LENGTH_SHORT).show();
+            if(isEmergency && result.contains("-")){
+                result = result.replaceAll("-","");
+            }
+            Log.e("tag","result "+result+ " phone numbeer "+result.length());
+            Toast.makeText(this, "result " + result, Toast.LENGTH_SHORT).show();
             if (result.contains("object detection") || result.contains("Object Detection")
                     || result.contains("Object detection")
                     || result.equalsIgnoreCase("object Detection")) {
@@ -210,14 +240,13 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                 isEmergency = false;
                 startTrackLocation(result);
 
-            }else if(result.contains("stop emergency") || result.contains("Stop emergency")
-                    || result.contains("stop Emergency") || result.contains("Stop Emergency")) {
+            } else if (result.contains("stop") || result.contains("Stop")) {
                 stopTracking();
             } else {
-                if(isEmergency){
+                if (isEmergency) {
                     isEmergency = false;
                     Toast.makeText(this, "Say again emergency", Toast.LENGTH_SHORT).show();
-                }else {
+                } else {
                     Toast.makeText(this, "Say clearly to detect", Toast.LENGTH_SHORT).show();
                 }
                 txtInfo.setVisibility(View.VISIBLE);
@@ -231,7 +260,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         HashMap<String, String> myHashAlarm = new HashMap<String, String>();
         myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
         myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, text);
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null);
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, myHashAlarm);
     }
 
     @Override
@@ -271,7 +300,6 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     }
 
 
-
     private void startTrackLocation(final String phoneNo) {
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
@@ -294,22 +322,22 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
             @Override
             public void onLocationFound(Location location) {
-                Log.e("tag","lcoation tracked");
-                String message  = "Your friend needs your help here  his latitude "+location.getLatitude()+ " and loingitude "+location.getLongitude();
-                sendSMS(phoneNo,message);
+                Log.e("tag", "lcoation tracked");
+                String message = "Your friend needs your help here  his latitude " + location.getLatitude() + " and loingitude " + location.getLongitude();
+                sendSMS(phoneNo, message);
             }
 
             @Override
             public void onTimeout() {
-                Log.e("tag","lcoation timeout");
+                Log.e("tag", "lcoation timeout");
             }
         };
 
         tracker.startListening();
     }
 
-    private void stopTracking(){
-        if(tracker != null) {
+    private void stopTracking() {
+        if (tracker != null) {
             tracker.stopListening();
         }
     }
@@ -320,17 +348,9 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             SmsManager smsManager = SmsManager.getDefault();
             smsManager.sendTextMessage(phoneNo, null, msg, null, null);
         } catch (Exception ex) {
-            Toast.makeText(getApplicationContext(),ex.getMessage().toString(),
+            Toast.makeText(getApplicationContext(), ex.getMessage().toString(),
                     Toast.LENGTH_LONG).show();
             ex.printStackTrace();
-        }
-    }
-
-
-    @Override
-    public void onUtteranceCompleted(String utteranceId) {
-        if(text.equalsIgnoreCase(utteranceId)){
-                onStartToListen();
         }
     }
 }

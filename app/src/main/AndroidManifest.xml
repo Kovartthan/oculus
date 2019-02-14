@@ -40,7 +40,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="portrait"></activity>
+            android:screenOrientation="portrait" />
         <activity
             android:name=".detection.DetectorActivity"
             android:screenOrientation="portrait" />
@@ -50,7 +50,8 @@
             android:value="ocr" />
 
         <activity android:name=".ocrreader.OcrCaptureActivity" />
-        <activity android:name=".HelpActivity"></activity>
+        <activity android:name=".HelpActivity" />
+        <activity android:name=".OcrMainActivity"></activity>
     </application>
 
 </manifest>
