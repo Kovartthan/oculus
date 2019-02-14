@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/rectangle"
+    tools:ignore="ExtraText"
+    tools:layout_editor_absoluteY="25dp">
+
+
+      <Button
+          android:id="@+id/button3"
+          android:layout_width="177dp"
+          android:layout_height="64dp"
+          android:layout_centerHorizontal="true"
+          android:layout_centerVertical="true"
+          android:background="@drawable/rounded_button"
+          android:text="sign in"
+          android:textColor="#EA5E25"
+          android:textSize="15sp"
+          tools:ignore="MissingConstraints"
+          tools:layout_editor_absoluteX="72dp"
+          tools:layout_editor_absoluteY="172dp" />
+
+
+      <ImageView
+          android:id="@+id/imageView5"
+          android:layout_width="95dp"
+          android:layout_height="77dp"
+          android:layout_alignParentBottom="true"
+          android:layout_centerHorizontal="true"
+          android:layout_marginBottom="51dp"
+          android:contentDescription="@string/desc"
+          android:orientation="vertical"
+          android:src="@drawable/fingerbelow"
+          tools:ignore="MissingConstraints"
+          tools:layout_editor_absoluteX="113dp"
+          tools:layout_editor_absoluteY="372dp" />
+
+
+      <ImageView
+          android:layout_width="155dp"
+          android:layout_height="180dp"
+          android:layout_alignParentBottom="true"
+          android:layout_centerHorizontal="true"
+          android:contentDescription="@string/den"
+          android:src="@drawable/fingerprint"
+          app:layout_constraintBottom_toBottomOf="parent"
+          app:layout_constraintEnd_toEndOf="parent"
+          app:layout_constraintStart_toStartOf="parent"
+          app:layout_constraintTop_toTopOf="parent"
+          app:layout_constraintVertical_bias="1.0"
+          tools:ignore="MissingConstraints" />
+</RelativeLayout>
