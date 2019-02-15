@@ -2,6 +2,7 @@ apply plugin: 'com.android.application'
 project.ext.ASSET_DIR = projectDir.toString() + '/src/main/assets'
 project.ext.TMP_DIR = project.buildDir.toString() + '/downloads'
 apply from: "download-models.gradle"
+apply plugin: 'io.fabric'
 android {
     buildToolsVersion '26.0.2'
     compileSdkVersion 26
@@ -45,9 +46,11 @@ dependencies {
     implementation 'com.android.support:design:26.0.0'
     implementation 'net.gotev:speech:1.4.0'
     implementation 'org.tensorflow:tensorflow-android:+'
-    compile 'com.google.android.gms:play-services-vision:9.6.1'
+    implementation 'com.google.android.gms:play-services-vision:15.0.1'
     implementation 'com.github.quentin7b:android-location-tracker:3.2'
     implementation 'pub.devrel:easypermissions:2.0.1'
+    implementation 'com.google.android.gms:play-services-location:15.0.1'
+    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.9'
 }
 apply plugin: 'com.google.gms.google-services'
 configurations.all {

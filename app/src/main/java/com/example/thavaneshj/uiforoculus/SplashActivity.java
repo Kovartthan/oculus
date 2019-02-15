@@ -104,6 +104,7 @@ public class SplashActivity extends AppCompatActivity implements EasyPermissions
     }
 
     private void launchHomeScreen(){
+
         if(((OculusApp)getApplication()).getAppPreference().isUserLoggedIn()){
             startActivity(new Intent(SplashActivity.this,MainActivity.class));
         }else{

@@ -1,11 +1,15 @@
 package com.example.thavaneshj.uiforoculus;
 
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationManager;
 import android.media.AudioManager;
-import android.os.Bundle;
+import android.net.Uri;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.support.annotation.NonNull;
@@ -13,6 +17,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
 import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.View;
@@ -29,6 +34,8 @@ import net.gotev.speech.SpeechRecognitionNotAvailable;
 import net.gotev.speech.SpeechUtil;
 import net.gotev.speech.ui.SpeechProgressView;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -45,6 +52,8 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     private boolean isEmergency;
     private LocationTracker tracker;
     private String text;
+    private boolean isNavigate;
+    private String navigationText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,8 +93,14 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             @Override
             public void onDone(String utteranceId) {
-                Log.e("tag","onDone "+utteranceId);
                 if (text.equalsIgnoreCase(utteranceId)) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            onStartToListen();
+                        }
+                    });
+                }else if(text.equalsIgnoreCase(utteranceId)){
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -106,12 +121,9 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     }
 
     private void onStartToListen() {
-        Log.e("tag","onStartToListen");
         if (Speech.getInstance().isListening()) {
-            Log.e("tag","stopListening");
             Speech.getInstance().stopListening();
         } else {
-
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 onRecordAudioPermissionGranted();
             } else {
@@ -138,9 +150,9 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         progress.setVisibility(View.VISIBLE);
         txtInfo.setVisibility(View.GONE);
         try {
-            Log.e("tag","stopTextToSpeech");
             Speech.getInstance().stopTextToSpeech();
             Speech.getInstance().startListening(progress, MainActivity.this);
+
         } catch (SpeechRecognitionNotAvailable exc) {
             showSpeechNotSupportedDialog();
 
@@ -216,19 +228,18 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             if(isEmergency && result.contains("-")){
                 result = result.replaceAll("-","");
             }
-            Log.e("tag","result "+result+ " phone numbeer "+result.length());
-            Toast.makeText(this, "result " + result, Toast.LENGTH_SHORT).show();
+
             if (result.contains("object detection") || result.contains("Object Detection")
                     || result.contains("Object detection")
                     || result.equalsIgnoreCase("object Detection")) {
 
                 startActivity(new Intent(MainActivity.this, DetectorActivity.class));
-                finish();
 
             } else if (result.contains("read text") || result.contains("Read Text")
                     || result.contains("Read text")
                     || result.equalsIgnoreCase("read Text")) {
 
+                startActivity(new Intent(MainActivity.this, OcrMainActivity.class));
 
             } else if (result.contains("emergency") || result.contains("Emergency") || result.contains("help") || result.contains("Help")) {
 
@@ -242,16 +253,67 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
             } else if (result.contains("stop") || result.contains("Stop")) {
                 stopTracking();
-            } else {
+            } else if(result.contains("navigation") || result.contains("Navigation")){
+                invokeNavigationMode();
+            }else if(isNavigate){
+                isNavigate = false;
+                fetchAddressForNavigation(result);
+            }else {
                 if (isEmergency) {
                     isEmergency = false;
                     Toast.makeText(this, "Say again emergency", Toast.LENGTH_SHORT).show();
+                }else if(isNavigate){
+                    isNavigate = false;
+                    Toast.makeText(this, "Say again navigation", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this, "Say clearly to detect", Toast.LENGTH_SHORT).show();
                 }
                 txtInfo.setVisibility(View.VISIBLE);
             }
         }
+    }
+
+    private void invokeNavigationMode() {
+        navigationText =  "Please tell location to navigate";
+        isNavigate = true;
+        HashMap<String, String> myHashAlarm = new HashMap<String, String>();
+        myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
+        myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, navigationText);
+        tts.speak(navigationText, TextToSpeech.QUEUE_FLUSH, myHashAlarm);
+    }
+
+    private void fetchAddressForNavigation(String result) {
+        Geocoder geocoder = new Geocoder(MainActivity.this);
+        List<Address> addresses = new ArrayList<>();
+        try {
+            addresses = geocoder.getFromLocationName(result, 1);
+            if(addresses.size() > 0) {
+                double latitude= addresses.get(0).getLatitude();
+                double longitude= addresses.get(0).getLongitude();
+                openGoogleMapForNavigation(latitude,longitude);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            Toast.makeText(this,"Cant open navigation",Toast.LENGTH_SHORT);
+        }
+
+    }
+
+    private void openGoogleMapForNavigation(double latitude, double longitude) {
+        Uri gmmIntentUri = Uri.parse("google.navigation:q="+String.valueOf(latitude)+","+String.valueOf(longitude));
+        Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+        mapIntent.setPackage("com.google.android.apps.maps");
+        try{
+            startActivity(mapIntent);
+        }catch (Exception e){
+            e.printStackTrace();
+            showErrorMapAppNotFound(gmmIntentUri);
+        }
+
+    }
+
+    private void showErrorMapAppNotFound(Uri gmmIntentUri) {
+        Toast.makeText(this, "Please install a maps application", Toast.LENGTH_LONG).show();
     }
 
     private void invokeEmergencyMode() {
@@ -295,11 +357,11 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
     private void speakOut() {
         String text = txtInfo.getText().toString();
-
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null);
     }
 
 
+    boolean isLocationTracking = false;
     private void startTrackLocation(final String phoneNo) {
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
@@ -308,13 +370,16 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             return;
         }
 
+
+        isLocationTracking = false;
+
         //TODO Change setMetersBetweenUpdates from one to desired meters
         TrackerSettings settings =
                 new TrackerSettings()
                         .setUseGPS(true)
                         .setUseNetwork(true)
                         .setUsePassive(true)
-                        .setTimeBetweenUpdates(30 * 60 * 1000)
+                        .setTimeBetweenUpdates(1000)
                         .setMetersBetweenUpdates(1);
 
 
@@ -322,14 +387,19 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
             @Override
             public void onLocationFound(Location location) {
-                Log.e("tag", "lcoation tracked");
-                String message = "Your friend needs your help here  his latitude " + location.getLatitude() + " and loingitude " + location.getLongitude();
-                sendSMS(phoneNo, message);
+                if(!isLocationTracking){
+                    Toast.makeText(MainActivity.this,"Location tracking started ",Toast.LENGTH_SHORT).show();
+                    isLocationTracking = true;
+                }
+                String message  = "Your friend needs your help here  his latitude "+location.getLatitude()+ " and longitude "+location.getLongitude();
+                sendSMS(phoneNo,message,location.getLatitude(),location.getLongitude());
             }
 
             @Override
             public void onTimeout() {
-                Log.e("tag", "lcoation timeout");
+                Toast.makeText(MainActivity.this,"Location fetch error still an help sms can be send ",Toast.LENGTH_SHORT).show();
+                String message  = "Your friend needs your help here call him";
+                sendSMS(phoneNo,message, 0, 0);
             }
         };
 
@@ -343,14 +413,61 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     }
 
 
-    public void sendSMS(String phoneNo, String msg) {
-        try {
-            SmsManager smsManager = SmsManager.getDefault();
-            smsManager.sendTextMessage(phoneNo, null, msg, null, null);
-        } catch (Exception ex) {
-            Toast.makeText(getApplicationContext(), ex.getMessage().toString(),
-                    Toast.LENGTH_LONG).show();
-            ex.printStackTrace();
+    public void sendSMS(String phoneNo, String msg, double latitude, double longitude) {
+        if(latitude != 0 && longitude != 0) {
+            Geocoder geocoder = new Geocoder(MainActivity.this);
+            try {
+                List<Address> addressList = geocoder.getFromLocation(latitude, longitude, 1);
+                if (addressList != null && addressList.size() > 0) {
+                    String address = addressList.get(0).getAddressLine(0);
+
+                    String province = addressList.get(0).getAdminArea();
+
+                    String country = addressList.get(0).getCountryName();
+
+                    String postalCode = addressList.get(0).getPostalCode();
+
+                    String knownName = addressList.get(0).getFeatureName();
+
+                    msg = "Street: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
+                            + "\nPostal CODE: " + postalCode + "\n" + "Place Name: " + knownName;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                SmsManager smsManager = SmsManager.getDefault();
+                smsManager.sendTextMessage(phoneNo, null, msg, null, null);
+            } catch (Exception ex) {
+                Toast.makeText(getApplicationContext(),"Sms cant send",
+                        Toast.LENGTH_LONG).show();
+                ex.printStackTrace();
+            }
         }
     }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if(!checkGPSOnOrOff()){
+            startActivity(new Intent(MainActivity.this,LocationOnOffDialog.class));
+        }
+    }
+
+
+    private boolean checkGPSOnOrOff(){
+         LocationManager manager = (LocationManager) MainActivity.this.getSystemService(Context.LOCATION_SERVICE);
+        return manager != null && manager.isProviderEnabled(LocationManager.GPS_PROVIDER) && hasGPSDevice(MainActivity.this);
+    }
+
+    private boolean hasGPSDevice(Context context) {
+        final LocationManager mgr = (LocationManager) context
+                .getSystemService(Context.LOCATION_SERVICE);
+        if (mgr == null)
+            return false;
+        final List<String> providers = mgr.getAllProviders();
+        return providers != null && providers.contains(LocationManager.GPS_PROVIDER);
+    }
+
 }
