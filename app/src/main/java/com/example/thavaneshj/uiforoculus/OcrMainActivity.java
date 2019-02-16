@@ -96,6 +96,8 @@ public class OcrMainActivity extends AppCompatActivity {
                                 stringBuilder.append("\n");
                             }
                             editText.setText(stringBuilder.toString());
+                            String toSpeak=editText.getText().toString();
+                            textToSpeech.speak(toSpeak,TextToSpeech.QUEUE_ADD,null);
                         }
                     });
                 }
