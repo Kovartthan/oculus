@@ -17,7 +17,7 @@ import pub.devrel.easypermissions.EasyPermissions;
 public class SplashActivity extends AppCompatActivity implements EasyPermissions.PermissionCallbacks,
         EasyPermissions.RationaleCallbacks {
     private static final String[] PERMISSIONS =
-            {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CAMERA, Manifest.permission.SEND_SMS};
+            {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CAMERA, Manifest.permission.SEND_SMS,Manifest.permission.WRITE_EXTERNAL_STORAGE};
     private static final int RC_PERMISSIONS = 124;
 
     @Override

@@ -10,6 +10,9 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.support.annotation.NonNull;
@@ -19,6 +22,7 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.telephony.SmsManager;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
@@ -54,6 +58,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     private String text;
     private boolean isNavigate;
     private String navigationText;
+    private String strInfo = "Say 'Object detection' or 'Read text' or 'Emergency' or 'Navigation'";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,18 +98,27 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             @Override
             public void onDone(String utteranceId) {
-                if (text.equalsIgnoreCase(utteranceId)) {
+                Log.e("tag","utteranceId "+utteranceId);
+                if (!TextUtils.isEmpty(text) && text.equalsIgnoreCase(utteranceId)) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             onStartToListen();
                         }
                     });
-                }else if(text.equalsIgnoreCase(utteranceId)){
+                }else if(!TextUtils.isEmpty(navigationText) && navigationText.equalsIgnoreCase(utteranceId)){
+                    Log.e("tag","navigationText entered");
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             onStartToListen();
+                        }
+                    });
+                }else if(!TextUtils.isEmpty(errorText) &&errorText.equalsIgnoreCase(utteranceId)){
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            progress.setEnabled(true);
                         }
                     });
                 }
@@ -112,6 +126,20 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
             @Override
             public void onError(String utteranceId) {
+                if (text.equalsIgnoreCase(utteranceId)) {
+                    isEmergency = false;
+                }
+                if(navigationText.equalsIgnoreCase(utteranceId)){
+                    isNavigate = false;
+                }else
+                if(errorText.equalsIgnoreCase(utteranceId)){
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            txtInfo.setEnabled(true);
+                        }
+                    });
+                }
             }
 
             @Override
@@ -122,9 +150,11 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
     private void onStartToListen() {
         if (Speech.getInstance().isListening()) {
+            Log.e("tag","stopListening");
             Speech.getInstance().stopListening();
         } else {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                Log.e("tag","onStartToListen");
                 onRecordAudioPermissionGranted();
             } else {
                 ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.RECORD_AUDIO}, PERMISSIONS_REQUEST);
@@ -150,9 +180,10 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         progress.setVisibility(View.VISIBLE);
         txtInfo.setVisibility(View.GONE);
         try {
+            Log.e("tag","onRecordAudioPermissionGranted");
             Speech.getInstance().stopTextToSpeech();
             Speech.getInstance().startListening(progress, MainActivity.this);
-
+            Log.e("tag","onRecordAudioPermissionGranted final");
         } catch (SpeechRecognitionNotAvailable exc) {
             showSpeechNotSupportedDialog();
 
@@ -254,21 +285,41 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             } else if (result.contains("stop") || result.contains("Stop")) {
                 stopTracking();
             } else if(result.contains("navigation") || result.contains("Navigation")){
+                Log.e("tag","navigation entered");
                 invokeNavigationMode();
             }else if(isNavigate){
                 isNavigate = false;
+                Log.e("tag","fetchAddressForNavigation entered");
                 fetchAddressForNavigation(result);
             }else {
+                vibrateDevice();
                 if (isEmergency) {
                     isEmergency = false;
-                    Toast.makeText(this, "Say again emergency", Toast.LENGTH_SHORT).show();
-                }else if(isNavigate){
+                }else if(isNavigate) {
                     isNavigate = false;
-                    Toast.makeText(this, "Say again navigation", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "Say clearly to detect", Toast.LENGTH_SHORT).show();
                 }
-                txtInfo.setVisibility(View.VISIBLE);
+                progress.setEnabled(false);
+                speakOutError();
+            }
+            txtInfo.setVisibility(View.VISIBLE);
+        }
+    }
+
+    String errorText = "Say clearly to detect";
+    private void speakOutError() {
+        HashMap<String, String> myHashAlarm = new HashMap<String, String>();
+        myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
+        myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, errorText);
+        tts.speak(errorText, TextToSpeech.QUEUE_FLUSH, myHashAlarm);
+    }
+
+    private void vibrateDevice() {
+        Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        if(v != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                v.vibrate(500);
             }
         }
     }
@@ -380,7 +431,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                         .setUseNetwork(true)
                         .setUsePassive(true)
                         .setTimeBetweenUpdates(1000)
-                        .setMetersBetweenUpdates(1);
+                        .setMetersBetweenUpdates(1000);
 
 
         tracker = new LocationTracker(this, settings) {
@@ -429,7 +480,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
                     String knownName = addressList.get(0).getFeatureName();
 
-                    msg = "Street: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
+                    msg = msg + "\nAccurate Latitude: "+latitude +"\nAccurate Longitude: "+longitude +"\n\nStreet: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
                             + "\nPostal CODE: " + postalCode + "\n" + "Place Name: " + knownName;
                 }
             } catch (IOException e) {
