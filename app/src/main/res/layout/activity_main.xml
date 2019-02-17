@@ -54,7 +54,7 @@
         android:gravity="center"
         android:fontFamily="monospace"
         android:textColor="@color/colorPrimaryDark"
-        android:text="Say 'Object detection' or 'Read text' or 'Emergency' or ' Stop Emergency' or 'Navigation'"
+        android:text="Say 'Object detection' or 'Read text' or 'Emergency' or ' Stop Emergency' or 'Navigation' or 'Nearby doctors'"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
