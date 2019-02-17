@@ -11,6 +11,7 @@ import android.location.LocationManager;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.speech.tts.TextToSpeech;
@@ -20,16 +21,21 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.Request;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
 import com.example.thavaneshj.uiforoculus.detection.DetectorActivity;
+import com.google.gson.Gson;
 
 import net.gotev.speech.GoogleVoiceTypingDisabledException;
 import net.gotev.speech.Speech;
@@ -37,6 +43,8 @@ import net.gotev.speech.SpeechDelegate;
 import net.gotev.speech.SpeechRecognitionNotAvailable;
 import net.gotev.speech.SpeechUtil;
 import net.gotev.speech.ui.SpeechProgressView;
+
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,6 +67,10 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     private boolean isNavigate;
     private String navigationText;
     private String strInfo = "Say 'Object detection' or 'Read text' or 'Emergency' or 'Navigation'";
+    private String GOOGLE_BROWSER_API_KEY = "AIzaSyD0Zatu89KDfC84fSYsGnolbSyDRslatwE";
+    private String PROXIMITY_RADIUS = "1000";
+    private String type = "doctor";
+    private boolean isPlacesSpeaking;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,7 +110,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             @Override
             public void onDone(String utteranceId) {
-                Log.e("tag","utteranceId "+utteranceId);
+                Log.e("tag", "utteranceId " + utteranceId);
                 if (!TextUtils.isEmpty(text) && text.equalsIgnoreCase(utteranceId)) {
                     runOnUiThread(new Runnable() {
                         @Override
@@ -106,19 +118,26 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                             onStartToListen();
                         }
                     });
-                }else if(!TextUtils.isEmpty(navigationText) && navigationText.equalsIgnoreCase(utteranceId)){
-                    Log.e("tag","navigationText entered");
+                } else if (!TextUtils.isEmpty(navigationText) && navigationText.equalsIgnoreCase(utteranceId)) {
+                    Log.e("tag", "navigationText entered");
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             onStartToListen();
                         }
                     });
-                }else if(!TextUtils.isEmpty(errorText) &&errorText.equalsIgnoreCase(utteranceId)){
+                } else if (!TextUtils.isEmpty(errorText) && errorText.equalsIgnoreCase(utteranceId)) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
                             progress.setEnabled(true);
+                        }
+                    });
+                }else if(utteranceId.equalsIgnoreCase("Press volume down button to stop speech")){
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            startLocationTracking();
                         }
                     });
                 }
@@ -129,10 +148,10 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                 if (text.equalsIgnoreCase(utteranceId)) {
                     isEmergency = false;
                 }
-                if(navigationText.equalsIgnoreCase(utteranceId)){
+                if (navigationText.equalsIgnoreCase(utteranceId)) {
                     isNavigate = false;
-                }else
-                if(errorText.equalsIgnoreCase(utteranceId)){
+                }
+                if (errorText.equalsIgnoreCase(utteranceId)) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -140,6 +159,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                         }
                     });
                 }
+
             }
 
             @Override
@@ -150,11 +170,11 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
     private void onStartToListen() {
         if (Speech.getInstance().isListening()) {
-            Log.e("tag","stopListening");
+            Log.e("tag", "stopListening");
             Speech.getInstance().stopListening();
         } else {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                Log.e("tag","onStartToListen");
+                Log.e("tag", "onStartToListen");
                 onRecordAudioPermissionGranted();
             } else {
                 ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.RECORD_AUDIO}, PERMISSIONS_REQUEST);
@@ -180,10 +200,10 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         progress.setVisibility(View.VISIBLE);
         txtInfo.setVisibility(View.GONE);
         try {
-            Log.e("tag","onRecordAudioPermissionGranted");
+            Log.e("tag", "onRecordAudioPermissionGranted");
             Speech.getInstance().stopTextToSpeech();
             Speech.getInstance().startListening(progress, MainActivity.this);
-            Log.e("tag","onRecordAudioPermissionGranted final");
+            Log.e("tag", "onRecordAudioPermissionGranted final");
         } catch (SpeechRecognitionNotAvailable exc) {
             showSpeechNotSupportedDialog();
 
@@ -249,15 +269,16 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
         imgMic.setVisibility(View.VISIBLE);
         progress.setVisibility(View.GONE);
-
+        tts.setSpeechRate(1f);
         if (result.isEmpty()) {
 
             txtInfo.setVisibility(View.VISIBLE);
             Speech.getInstance().say(getString(R.string.repeat));
 
         } else {
-            if(isEmergency && result.contains("-")){
-                result = result.replaceAll("-","");
+            Log.e("tag","result "+result);
+            if (isEmergency && result.contains("-")) {
+                result = result.replaceAll("-", "");
             }
 
             if (result.contains("object detection") || result.contains("Object Detection")
@@ -284,18 +305,24 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
             } else if (result.contains("stop") || result.contains("Stop")) {
                 stopTracking();
-            } else if(result.contains("navigation") || result.contains("Navigation")){
-                Log.e("tag","navigation entered");
+            } else if (result.contains("navigation") || result.contains("Navigation")) {
+                Log.e("tag", "navigation entered");
                 invokeNavigationMode();
-            }else if(isNavigate){
+            } else if (isNavigate) {
                 isNavigate = false;
-                Log.e("tag","fetchAddressForNavigation entered");
+                Log.e("tag", "fetchAddressForNavigation entered");
                 fetchAddressForNavigation(result);
+            } else if(result.contains("nearby doctors")|| result.contains("near by doctors")){
+                String text = "Press volume down button to stop speech";
+                HashMap<String, String> myHashAlarm = new HashMap<String, String>();
+                myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
+                myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, text);
+                tts.speak(text, TextToSpeech.QUEUE_FLUSH, myHashAlarm);
             }else {
                 vibrateDevice();
                 if (isEmergency) {
                     isEmergency = false;
-                }else if(isNavigate) {
+                } else if (isNavigate) {
                     isNavigate = false;
                 }
                 progress.setEnabled(false);
@@ -306,6 +333,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     }
 
     String errorText = "Say clearly to detect";
+
     private void speakOutError() {
         HashMap<String, String> myHashAlarm = new HashMap<String, String>();
         myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
@@ -315,7 +343,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
     private void vibrateDevice() {
         Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        if(v != null) {
+        if (v != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 v.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
@@ -325,7 +353,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     }
 
     private void invokeNavigationMode() {
-        navigationText =  "Please tell location to navigate";
+        navigationText = "Please tell location to navigate";
         isNavigate = true;
         HashMap<String, String> myHashAlarm = new HashMap<String, String>();
         myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
@@ -338,25 +366,25 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         List<Address> addresses = new ArrayList<>();
         try {
             addresses = geocoder.getFromLocationName(result, 1);
-            if(addresses.size() > 0) {
-                double latitude= addresses.get(0).getLatitude();
-                double longitude= addresses.get(0).getLongitude();
-                openGoogleMapForNavigation(latitude,longitude);
+            if (addresses.size() > 0) {
+                double latitude = addresses.get(0).getLatitude();
+                double longitude = addresses.get(0).getLongitude();
+                openGoogleMapForNavigation(latitude, longitude);
             }
         } catch (IOException e) {
             e.printStackTrace();
-            Toast.makeText(this,"Cant open navigation",Toast.LENGTH_SHORT);
+            Toast.makeText(this, "Cant open navigation", Toast.LENGTH_SHORT);
         }
 
     }
 
     private void openGoogleMapForNavigation(double latitude, double longitude) {
-        Uri gmmIntentUri = Uri.parse("google.navigation:q="+String.valueOf(latitude)+","+String.valueOf(longitude));
+        Uri gmmIntentUri = Uri.parse("google.navigation:q=" + String.valueOf(latitude) + "," + String.valueOf(longitude));
         Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
         mapIntent.setPackage("com.google.android.apps.maps");
-        try{
+        try {
             startActivity(mapIntent);
-        }catch (Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
             showErrorMapAppNotFound(gmmIntentUri);
         }
@@ -413,6 +441,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
 
     boolean isLocationTracking = false;
+
     private void startTrackLocation(final String phoneNo) {
 
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
@@ -438,19 +467,19 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
             @Override
             public void onLocationFound(Location location) {
-                if(!isLocationTracking){
-                    Toast.makeText(MainActivity.this,"Location tracking started ",Toast.LENGTH_SHORT).show();
+                if (!isLocationTracking) {
+                    Toast.makeText(MainActivity.this, "Location tracking started ", Toast.LENGTH_SHORT).show();
                     isLocationTracking = true;
                 }
-                String message  = "Your friend needs your help here  his latitude "+location.getLatitude()+ " and longitude "+location.getLongitude();
-                sendSMS(phoneNo,message,location.getLatitude(),location.getLongitude());
+                String message = "Your friend needs your help here  his latitude " + location.getLatitude() + " and longitude " + location.getLongitude();
+                sendSMS(phoneNo, message, location.getLatitude(), location.getLongitude());
             }
 
             @Override
             public void onTimeout() {
-                Toast.makeText(MainActivity.this,"Location fetch error still an help sms can be send ",Toast.LENGTH_SHORT).show();
-                String message  = "Your friend needs your help here call him";
-                sendSMS(phoneNo,message, 0, 0);
+                Toast.makeText(MainActivity.this, "Location fetch error still an help sms can be send ", Toast.LENGTH_SHORT).show();
+                String message = "Your friend needs your help here call him";
+                sendSMS(phoneNo, message, 0, 0);
             }
         };
 
@@ -465,7 +494,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
 
     public void sendSMS(String phoneNo, String msg, double latitude, double longitude) {
-        if(latitude != 0 && longitude != 0) {
+        if (latitude != 0 && longitude != 0) {
             Geocoder geocoder = new Geocoder(MainActivity.this);
             try {
                 List<Address> addressList = geocoder.getFromLocation(latitude, longitude, 1);
@@ -480,7 +509,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
                     String knownName = addressList.get(0).getFeatureName();
 
-                    msg = msg + "\nAccurate Latitude: "+latitude +"\nAccurate Longitude: "+longitude +"\n\nStreet: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
+                    msg = msg + "\nAccurate Latitude: " + latitude + "\nAccurate Longitude: " + longitude + "\n\nStreet: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
                             + "\nPostal CODE: " + postalCode + "\n" + "Place Name: " + knownName;
                 }
             } catch (IOException e) {
@@ -490,7 +519,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                 SmsManager smsManager = SmsManager.getDefault();
                 smsManager.sendTextMessage(phoneNo, null, msg, null, null);
             } catch (Exception ex) {
-                Toast.makeText(getApplicationContext(),"Sms cant send",
+                Toast.makeText(getApplicationContext(), "Sms cant send",
                         Toast.LENGTH_LONG).show();
                 ex.printStackTrace();
             }
@@ -501,14 +530,14 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     @Override
     protected void onResume() {
         super.onResume();
-        if(!checkGPSOnOrOff()){
-            startActivity(new Intent(MainActivity.this,LocationOnOffDialog.class));
+        if (!checkGPSOnOrOff()) {
+            startActivity(new Intent(MainActivity.this, LocationOnOffDialog.class));
         }
     }
 
 
-    private boolean checkGPSOnOrOff(){
-         LocationManager manager = (LocationManager) MainActivity.this.getSystemService(Context.LOCATION_SERVICE);
+    private boolean checkGPSOnOrOff() {
+        LocationManager manager = (LocationManager) MainActivity.this.getSystemService(Context.LOCATION_SERVICE);
         return manager != null && manager.isProviderEnabled(LocationManager.GPS_PROVIDER) && hasGPSDevice(MainActivity.this);
     }
 
@@ -520,5 +549,110 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
         final List<String> providers = mgr.getAllProviders();
         return providers != null && providers.contains(LocationManager.GPS_PROVIDER);
     }
+
+    LocationTracker placesTracker;
+    private void startLocationTracking(){
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+
+        //TODO Change setMetersBetweenUpdates from one to desired meters
+        TrackerSettings settings =
+                new TrackerSettings()
+                        .setUseGPS(true)
+                        .setUseNetwork(true)
+                        .setUsePassive(true)
+                        .setTimeBetweenUpdates(1000)
+                        .setMetersBetweenUpdates(1000);
+
+        placesTracker = new LocationTracker(this, settings) {
+
+            @Override
+            public void onLocationFound(Location location) {
+                placesTracker.stopListening();
+                loadNearByPlaces(location.getLatitude(),location.getLongitude());
+            }
+
+            @Override
+            public void onTimeout() {
+            }
+        };
+
+        placesTracker.startListening();
+    }
+    boolean isApiRunning = false;
+    private void loadNearByPlaces(double latitude, double longitude) {
+
+        isApiRunning = false;
+        final ArrayList<String> placesList = new ArrayList<>();
+
+        StringBuilder googlePlacesUrl =
+                new StringBuilder("https://maps.googleapis.com/maps/api/place/nearbysearch/json?");
+        googlePlacesUrl.append("location=").append(latitude).append(",").append(longitude);
+        googlePlacesUrl.append("&radius=").append(PROXIMITY_RADIUS);
+        googlePlacesUrl.append("&type=").append(type);
+        googlePlacesUrl.append("&sensor=true");
+        googlePlacesUrl.append("&key=" + GOOGLE_BROWSER_API_KEY);
+
+
+        JsonObjectRequest jsonObjReq = new JsonObjectRequest(Request.Method.GET, googlePlacesUrl.toString(),
+                null, new Response.Listener<JSONObject>() {
+
+            @Override
+            public void onResponse(JSONObject response) {
+                if(!isApiRunning) {
+                    isApiRunning = true;
+                    GooglePlacesParser googlePlacesParser = new Gson().fromJson
+                            (response.toString(),GooglePlacesParser.class);
+                    if(googlePlacesParser.status.equalsIgnoreCase("OK")) {
+                        if(googlePlacesParser.results.size() > 0) {
+                            for (int i = 0; i < googlePlacesParser.results.size(); i++) {
+                                GooglePlacesParser.Result result = googlePlacesParser.results.get(i);
+                                String doctorPlaces = result.name + " " + result.vicinity;
+                                placesList.add(doctorPlaces);
+                            }
+                            if (placesList.size() > 0) {
+                                speakOutAllPlaces(placesList);
+                            }
+                        }else{
+                            String etext = "No doctors found nearby";
+                            tts.speak(etext, TextToSpeech.QUEUE_FLUSH, null);
+                        }
+                    }else{
+                        String etext = "Google places error";
+                        tts.speak(etext, TextToSpeech.QUEUE_FLUSH, null);
+                    }
+                }
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+            }
+        });
+        OculusApp.getInstance().addToRequestQueue(jsonObjReq, "jreq");
+    }
+
+    private void speakOutAllPlaces(ArrayList<String> placesList) {
+        if(tts.isSpeaking())
+            tts.stop();
+        tts.setSpeechRate(0.7f);
+        for(String places : placesList) {
+            isPlacesSpeaking = true;
+            tts.speak(places, TextToSpeech.QUEUE_ADD, null);
+        }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if ((keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && isPlacesSpeaking)){
+            if(tts.isSpeaking())
+                tts.stop();
+        }
+        return true;
+    }
+
 
 }
