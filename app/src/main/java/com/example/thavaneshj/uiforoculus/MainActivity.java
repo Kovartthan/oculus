@@ -587,6 +587,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     private void loadNearByPlaces(double latitude, double longitude) {
 
         isApiRunning = false;
+        isPlacesSpeaking = false;
         final ArrayList<String> placesList = new ArrayList<>();
 
         StringBuilder googlePlacesUrl =
@@ -648,6 +649,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if ((keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && isPlacesSpeaking)){
+            isPlacesSpeaking = false;
             if(tts.isSpeaking())
                 tts.stop();
         }
