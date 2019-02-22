@@ -35,6 +35,10 @@ import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.example.thavaneshj.uiforoculus.detection.DetectorActivity;
+import com.example.thavaneshj.uiforoculus.facerecognistion.Activities.AddPersonPreviewActivity;
+import com.example.thavaneshj.uiforoculus.facerecognistion.Activities.RecognitionActivity;
+import com.example.thavaneshj.uiforoculus.facerecognistion.Activities.SettingsActivity;
+import com.example.thavaneshj.uiforoculus.facerecognistion.Activities.TrainingActivity;
 import com.google.gson.Gson;
 
 import net.gotev.speech.GoogleVoiceTypingDisabledException;
@@ -46,12 +50,14 @@ import net.gotev.speech.ui.SpeechProgressView;
 
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
+import ch.zhaw.facerecognitionlibrary.Helpers.FileHelper;
 import fr.quentinklein.slt.LocationTracker;
 import fr.quentinklein.slt.TrackerSettings;
 
@@ -68,9 +74,21 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
     private String navigationText;
     private String strInfo = "Say 'Object detection' or 'Read text' or 'Emergency' or 'Navigation'";
     private String GOOGLE_BROWSER_API_KEY = "AIzaSyD0Zatu89KDfC84fSYsGnolbSyDRslatwE";
-    private String PROXIMITY_RADIUS = "1000";
+    private String PROXIMITY_RADIUS = "2500";
     private String type = "doctor";
     private boolean isPlacesSpeaking;
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if(resultCode == RESULT_OK && requestCode == ADD_PERSON_RESULT_CODE){
+            speakOutMessage("Add person successfully, speak out import person");
+        }else if(resultCode == RESULT_OK && requestCode == IMPORT_RESULT_CODE){
+            speakOutMessage("Import person succeed, now u can try to speak out face detection");
+        }else if(resultCode == RESULT_CANCELED && requestCode == ADD_PERSON_RESULT_CODE){
+            speakOutMessage("Import person failed, try again to tell import person");
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -276,7 +294,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             Speech.getInstance().say(getString(R.string.repeat));
 
         } else {
-            Log.e("tag","result "+result);
+            Toast.makeText(MainActivity.this, "Voice input : "+result, Toast.LENGTH_SHORT).show();
             if (isEmergency && result.contains("-")) {
                 result = result.replaceAll("-", "");
             }
@@ -306,18 +324,37 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
             } else if (result.contains("stop") || result.contains("Stop")) {
                 stopTracking();
             } else if (result.contains("navigation") || result.contains("Navigation")) {
-                Log.e("tag", "navigation entered");
+
                 invokeNavigationMode();
+
             } else if (isNavigate) {
+
                 isNavigate = false;
-                Log.e("tag", "fetchAddressForNavigation entered");
                 fetchAddressForNavigation(result);
+
             } else if(result.contains("nearby doctors")|| result.contains("near by doctors")){
+
                 String text = "Press volume down button to stop speech";
                 HashMap<String, String> myHashAlarm = new HashMap<String, String>();
                 myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_STREAM, String.valueOf(AudioManager.STREAM_ALARM));
                 myHashAlarm.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, text);
                 tts.speak(text, TextToSpeech.QUEUE_FLUSH, myHashAlarm);
+
+            }else if(result.contains("add person")|| result.contains("Add Person") || result.contains("add Person")){
+
+                startAddPerson(result);
+
+            }else if(result.contains("import person") ||result.contains("Import Person") || result.contains("Import person") ){
+
+                startImportPerson();
+
+            }else if(result.contains("face detection") ||result.contains("Face detection") || result.contains("Face Detection") ){
+
+                startFaceDetection();
+
+            }else if(result.contains("face detection settings") ||result.contains("Face detection settings") || result.contains("Face Detection Settings")){
+
+                startSettingsForFaceDetection();
             }else {
                 vibrateDevice();
                 if (isEmergency) {
@@ -471,7 +508,7 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                     Toast.makeText(MainActivity.this, "Location tracking started ", Toast.LENGTH_SHORT).show();
                     isLocationTracking = true;
                 }
-                String message = "Your friend needs your help here  his latitude " + location.getLatitude() + " and longitude " + location.getLongitude();
+                String message = "Your friend needs your help here  \nLatitude " + location.getLatitude() + "\nLongitude " + location.getLongitude();
                 sendSMS(phoneNo, message, location.getLatitude(), location.getLongitude());
             }
 
@@ -509,10 +546,12 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
 
                     String knownName = addressList.get(0).getFeatureName();
 
-                    msg = msg + "\nAccurate Latitude: " + latitude + "\nAccurate Longitude: " + longitude + "\n\nStreet: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
+                    msg = msg + "\nStreet: " + address + "\n" + "City/Province: " + province + "\nCountry: " + country
                             + "\nPostal CODE: " + postalCode + "\n" + "Place Name: " + knownName;
                 }
             } catch (IOException e) {
+                Toast.makeText(getApplicationContext(), "Sms cant send",
+                        Toast.LENGTH_LONG).show();
                 e.printStackTrace();
             }
             try {
@@ -620,10 +659,12 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                             }
                         }else{
                             String etext = "No doctors found nearby";
+                            Toast.makeText(MainActivity.this, etext, Toast.LENGTH_SHORT).show();
                             tts.speak(etext, TextToSpeech.QUEUE_FLUSH, null);
                         }
                     }else{
                         String etext = "Google places error";
+                        Toast.makeText(MainActivity.this, etext, Toast.LENGTH_SHORT).show();
                         tts.speak(etext, TextToSpeech.QUEUE_FLUSH, null);
                     }
                 }
@@ -654,6 +695,63 @@ public class MainActivity extends AppCompatActivity implements SpeechDelegate, T
                 tts.stop();
         }
         return true;
+    }
+
+    private int ADD_PERSON_RESULT_CODE = 1500;
+    private int IMPORT_RESULT_CODE = 1501;
+
+    private void startAddPerson(String name){
+        Intent intent = new Intent(this, AddPersonPreviewActivity.class);
+        intent.putExtra("Name", name);
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra("Method", AddPersonPreviewActivity.TIME);
+        if(isNameAlreadyUsed(new FileHelper().getTrainingList(), name)){
+            Toast.makeText(getApplicationContext(), "This name is already used. Please choose another one.", Toast.LENGTH_SHORT).show();
+            speakOutMessage("This name is already used. Please choose another one.");
+        } else {
+            intent.putExtra("Folder", "Training");
+            startActivityForResult(intent,ADD_PERSON_RESULT_CODE);
+        }
+    }
+
+
+    private void startImportPerson() {
+        Intent intent = new Intent(this, TrainingActivity.class);
+        startActivityForResult(intent,IMPORT_RESULT_CODE);
+    }
+
+    private void startFaceDetection(){
+        Intent intent = new Intent(this, RecognitionActivity.class);
+        startActivity(intent);
+    }
+
+    private void startSettingsForFaceDetection(){
+        Intent intent = new Intent(this, SettingsActivity.class);
+        startActivity(intent);
+    }
+    private boolean isNameAlreadyUsed(File[] list, String name){
+        boolean used = false;
+        if(list != null && list.length > 0){
+            for(File person : list){
+                // The last token is the name --> Folder name = Person name
+                String[] tokens = person.getAbsolutePath().split("/");
+                final String foldername = tokens[tokens.length-1];
+                if(foldername.equals(name)){
+                    used = true;
+                    break;
+                }
+            }
+        }
+        return used;
+    }
+
+    private void speakOutMessage(String message){
+        if(tts != null ) {
+            if(tts.isSpeaking()) {
+                tts.stop();
+            }
+            tts.speak(message, TextToSpeech.QUEUE_FLUSH, null);
+        }
     }
 
 
